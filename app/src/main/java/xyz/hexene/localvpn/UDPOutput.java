@@ -29,8 +29,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class UDPOutput implements Runnable
-{
+public class UDPOutput implements Runnable {
     private static final String TAG = UDPOutput.class.getSimpleName();
 
     private LocalVPNService vpnService;
@@ -39,36 +38,29 @@ public class UDPOutput implements Runnable
 
     private static final int MAX_CACHE_SIZE = 50;
     private LRUCache<String, DatagramChannel> channelCache =
-            new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, DatagramChannel>()
-            {
+            new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, DatagramChannel>() {
                 @Override
-                public void cleanup(Map.Entry<String, DatagramChannel> eldest)
-                {
+                public void cleanup(Map.Entry<String, DatagramChannel> eldest) {
                     closeChannel(eldest.getValue());
                 }
             });
 
-    public UDPOutput(ConcurrentLinkedQueue<Packet> inputQueue, Selector selector, LocalVPNService vpnService)
-    {
+    public UDPOutput(ConcurrentLinkedQueue<Packet> inputQueue, Selector selector, LocalVPNService vpnService) {
         this.inputQueue = inputQueue;
         this.selector = selector;
         this.vpnService = vpnService;
     }
 
     @Override
-    public void run()
-    {
+    public void run() {
         Log.i(TAG, "Started");
-        try
-        {
+        try {
 
             Thread currentThread = Thread.currentThread();
-            while (true)
-            {
+            while (true) {
                 Packet currentPacket;
                 // TODO: Block when not connected
-                do
-                {
+                do {
                     currentPacket = inputQueue.poll();
                     if (currentPacket != null)
                         break;
@@ -86,12 +78,9 @@ public class UDPOutput implements Runnable
                 DatagramChannel outputChannel = channelCache.get(ipAndPort);
                 if (outputChannel == null) {
                     outputChannel = DatagramChannel.open();
-                    try
-                    {
+                    try {
                         outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
-                    }
-                    catch (IOException e)
-                    {
+                    } catch (IOException e) {
                         Log.e(TAG, "Connection error: " + ipAndPort, e);
                         closeChannel(outputChannel);
                         ByteBufferPool.release(currentPacket.backingBuffer);
@@ -108,53 +97,38 @@ public class UDPOutput implements Runnable
                     channelCache.put(ipAndPort, outputChannel);
                 }
 
-                try
-                {
+                try {
                     ByteBuffer payloadBuffer = currentPacket.backingBuffer;
                     while (payloadBuffer.hasRemaining())
                         outputChannel.write(payloadBuffer);
-                }
-                catch (IOException e)
-                {
+                } catch (IOException e) {
                     Log.e(TAG, "Network write error: " + ipAndPort, e);
                     channelCache.remove(ipAndPort);
                     closeChannel(outputChannel);
                 }
                 ByteBufferPool.release(currentPacket.backingBuffer);
             }
-        }
-        catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             Log.i(TAG, "Stopping");
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             Log.i(TAG, e.toString(), e);
-        }
-        finally
-        {
+        } finally {
             closeAll();
         }
     }
 
-    private void closeAll()
-    {
+    private void closeAll() {
         Iterator<Map.Entry<String, DatagramChannel>> it = channelCache.entrySet().iterator();
-        while (it.hasNext())
-        {
+        while (it.hasNext()) {
             closeChannel(it.next().getValue());
             it.remove();
         }
     }
 
-    private void closeChannel(DatagramChannel channel)
-    {
-        try
-        {
+    private void closeChannel(DatagramChannel channel) {
+        try {
             channel.close();
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             // Ignore
         }
     }
